@@ -16,8 +16,6 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"groups", "boards"})
-@EqualsAndHashCode(exclude = {"groups", "boards"})
 public class User implements UserDetails {
 
     @Id
@@ -44,17 +42,6 @@ public class User implements UserDetails {
     @OneToOne(mappedBy = "owner", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private Board board;
-
-    // Helper methods to manage bidirectional relationship
-    public void addGroup(Group group) {
-        groups.add(group);
-        group.getUsers().add(this);
-    }
-
-    public void removeGroup(Group group) {
-        groups.remove(group);
-        group.getUsers().remove(this);
-    }
 
     @Override
     @JsonIgnore

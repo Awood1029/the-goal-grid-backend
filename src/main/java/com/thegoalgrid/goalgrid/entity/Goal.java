@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // Entity/Goal.java
 @Entity
 @Table(name = "goals")
@@ -31,4 +34,10 @@ public class Goal {
 
     @Column(nullable = false)
     private boolean completed = false;
+
+    @OneToMany(mappedBy = "referencedGoal", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Post> postsReferencingGoal = new ArrayList<>();
+
+    @OneToMany(mappedBy = "goal", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Comment> comments = new ArrayList<>();
 }

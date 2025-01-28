@@ -2,6 +2,7 @@
 package com.thegoalgrid.goalgrid.controller;
 
 import com.thegoalgrid.goalgrid.dto.GoalDTO;
+import com.thegoalgrid.goalgrid.dto.social.CommentDTO;
 import com.thegoalgrid.goalgrid.entity.Goal;
 import com.thegoalgrid.goalgrid.entity.User;
 import com.thegoalgrid.goalgrid.service.GoalService;
@@ -12,10 +13,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Nonnull;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/goals")
@@ -75,5 +79,29 @@ public class GoalController {
             logger.error("Error updating goal status: {}", e.getMessage());
             throw new RuntimeException("Failed to update goal status: " + e.getMessage());
         }
+    }
+
+    /**
+     * Get all comments for a specific goal.
+     * Example: GET /api/goals/{goalID}/comments
+     */
+    @GetMapping("/{goalId}/comments")
+    public List<CommentDTO> getAllCommentsForGoal(@PathVariable Long goalId) {
+        return goalService.getAllCommentsForGoal(goalId);
+    }
+
+    /**
+     * Create a new comment on a specific goal.
+     * Example: POST /api/goals/{goalId}/comments
+     */
+    @PreAuthorize("isAuthenticated()")
+    @PostMapping("/{goalId}/comments")
+    public CommentDTO createCommentForGoal(
+            @PathVariable Long goalId,
+            @RequestBody CommentDTO commentDTO,
+            Authentication authentication
+    ) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        return goalService.createCommentForGoal(goalId, commentDTO, userDetails);
     }
 }
