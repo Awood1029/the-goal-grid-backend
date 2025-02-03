@@ -16,8 +16,6 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"groups", "boards"})
-@EqualsAndHashCode(exclude = {"groups", "boards"})
 public class User implements UserDetails {
 
     @Id
@@ -45,15 +43,37 @@ public class User implements UserDetails {
     @JsonIgnore
     private Board board;
 
-    // Helper methods to manage bidirectional relationship
-    public void addGroup(Group group) {
-        groups.add(group);
-        group.getUsers().add(this);
+    // Self-referential many-to-many relationship for friendships
+    @ManyToMany
+    @JoinTable(
+            name = "user_friends",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "friend_id")
+    )
+    private Set<User> friends = new HashSet<>();
+
+    /**
+     * Adds a friend to this user’s friend list and also updates the friend's friend list.
+     * This creates a bidirectional friendship.
+     *
+     * @param friend the user to be added as a friend
+     */
+    public void addFriend(User friend) {
+        if (this.equals(friend)) {
+            throw new IllegalArgumentException("Cannot add yourself as a friend.");
+        }
+        this.friends.add(friend);
+        friend.getFriends().add(this);
     }
 
-    public void removeGroup(Group group) {
-        groups.remove(group);
-        group.getUsers().remove(this);
+    /**
+     * Removes a friend from this user’s friend list and also updates the friend's friend list.
+     *
+     * @param friend the user to be removed from the friend list
+     */
+    public void removeFriend(User friend) {
+        this.friends.remove(friend);
+        friend.getFriends().remove(this);
     }
 
     @Override
