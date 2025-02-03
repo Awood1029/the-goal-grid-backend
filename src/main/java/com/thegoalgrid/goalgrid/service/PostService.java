@@ -10,11 +10,14 @@ import com.thegoalgrid.goalgrid.mapper.ReactionMapper;
 import com.thegoalgrid.goalgrid.repository.*;
 import com.thegoalgrid.goalgrid.security.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -46,9 +49,9 @@ public class PostService {
         post.setCreatedAt(LocalDateTime.now());
 
         // If a referencedGoalId is provided, load the Goal and assign it.
-        if (postDTO.getReferencedGoalId() != null) {
-            Goal goal = goalRepository.findById(postDTO.getReferencedGoalId())
-                    .orElseThrow(() -> new RuntimeException("Goal not found with id: " + postDTO.getReferencedGoalId()));
+        if (postDTO.getReferencedGoal() != null) {
+            Goal goal = goalRepository.findById(postDTO.getReferencedGoal().getId())
+                    .orElseThrow(() -> new RuntimeException("Goal not found with id: " + postDTO.getReferencedGoal().getId()));
             post.setReferencedGoal(goal);
         }
 
@@ -83,9 +86,10 @@ public class PostService {
         if (postDTO.getContent() != null) {
             post.setContent(postDTO.getContent());
         }
-        if (postDTO.getReferencedGoalId() != null) {
-            Goal goal = goalRepository.findById(postDTO.getReferencedGoalId())
-                    .orElseThrow(() -> new RuntimeException("Goal not found with id: " + postDTO.getReferencedGoalId()));
+
+        if (postDTO.getReferencedGoal().getId() != null) {
+            Goal goal = goalRepository.findById(postDTO.getReferencedGoal().getId())
+                    .orElseThrow(() -> new RuntimeException("Goal not found with id: " + postDTO.getReferencedGoal().getId()));
             post.setReferencedGoal(goal);
         }
         postRepository.save(post);
@@ -110,10 +114,16 @@ public class PostService {
     }
 
     /**
-     * Retrieve all comments for a given post.
+     * Retrieve all comments for a specific post with sorting.
      */
-    public List<CommentDTO> getAllCommentsForPost(Long postId) {
-        List<Comment> comments = commentRepository.findByPost_Id(postId);
+    public List<CommentDTO> getAllCommentsForPost(Long postId, String sortBy, String sortDir) {
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (sortDir.equalsIgnoreCase("desc")) {
+            direction = Sort.Direction.DESC;
+        }
+        Sort sort = Sort.by(direction, sortBy);
+
+        List<Comment> comments = commentRepository.findByPost_Id(postId, sort);
         return comments.stream()
                 .map(commentMapper::toDTO)
                 .collect(Collectors.toList());
@@ -165,72 +175,101 @@ public class PostService {
         return reactionMapper.toDTO(savedReaction);
     }
 
+    /**
+     * Remove a reaction for a specific post.
+     */
+    @Transactional
+    public void removeReactionForPost(Long postId, ReactionType type, UserDetailsImpl userDetails) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found with ID: " + postId));
+        User user = userService.getUserById(userDetails.getId());
+
+        // Find the existing reaction
+        PostReaction reaction = postReactionRepository.findByUserAndTypeAndPost(user, type, post)
+                .orElseThrow(() -> new RuntimeException("Reaction not found for type: " + type));
+
+        // Remove the reaction
+        post.getPostReactions().remove(reaction);
+        postReactionRepository.delete(reaction);
+    }
 
     /**
-     * Retrieve the main feed.
-     *
-     * This implementation gathers all groups in which the current user is a member,
-     * then collects all user IDs (including the current user) that belong to those groups.
-     * Finally, it retrieves posts authored by any of those users.
-     *
-     * @param userDetails The current logged-in user.
-     * @return A list of PostDTOs for the main feed.
+     * Retrieve the main feed with dynamic sorting.
      */
-    public List<PostDTO> getMainFeed(UserDetailsImpl userDetails) {
+    @Transactional(readOnly = true)
+    public Page<PostDTO> getMainFeed(UserDetailsImpl userDetails, int page, int size, String sortBy, String sortDir) {
         User currentUser = userService.getUserById(userDetails.getId());
-        // Get the groups the current user belongs to
-        Set<Group> userGroups = currentUser.getGroups();
-
-        // Collect all user IDs from these groups
-        Set<Long> userIds = userGroups.stream()
-                .flatMap(group -> group.getUsers().stream())
+        // Fetch posts only from friends (using the User.friends set)
+        List<Long> userIds = currentUser.getFriends().stream()
                 .map(User::getId)
-                .collect(Collectors.toSet());
-        // Ensure the current user's own posts are included
-        userIds.add(currentUser.getId());
-
-        // Retrieve posts for the collected user IDs
-        List<Post> posts = postRepository.findByAuthor_IdIn(new ArrayList<>(userIds));
-        return posts.stream()
-                .map(postMapper::toDTO)
                 .collect(Collectors.toList());
+
+        // Add own users post
+        userIds.add(userDetails.getId());
+
+        // Determine sort direction
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        // Fetch posts where the author is one of the friends
+        Page<Post> postsPage = postRepository.findByAuthor_IdIn(userIds, pageable);
+        return postsPage.map(postMapper::toDTO);
     }
 
     /**
-     * Retrieve posts for a specific group.
-     *
-     * This implementation finds the group by its unique URL, collects its members'
-     * user IDs, and then retrieves posts authored by these users.
-     *
-     * @param groupUrl The unique URL of the group.
-     * @return A list of PostDTOs for the group feed.
+     * Retrieve feed for a specific group with dynamic sorting.
      */
-    public List<PostDTO> getGroupFeed(String groupUrl) {
-        Group group = groupRepository.findByUniqueUrl(groupUrl)
-                .orElseThrow(() -> new RuntimeException("Group not found with URL: " + groupUrl));
+    public Page<PostDTO> getGroupFeed(String groupUniqueCode, int page, int size, String sortBy, String sortDir) {
+        Group group = groupRepository.findByUniqueUrl(groupUniqueCode)
+                .orElseThrow(() -> new RuntimeException("Group not found with unique URL: " + groupUniqueCode));
 
-        // Collect user IDs from the group
-        Set<Long> userIds = group.getUsers().stream()
+        List<Long> memberIds = group.getUsers().stream()
                 .map(User::getId)
-                .collect(Collectors.toSet());
-
-        List<Post> posts = postRepository.findByAuthor_IdIn(new ArrayList<>(userIds));
-        return posts.stream()
-                .map(postMapper::toDTO)
                 .collect(Collectors.toList());
+
+        // Determine Sort direction
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (sortDir.equalsIgnoreCase("desc")) {
+            direction = Sort.Direction.DESC;
+        }
+
+        // Create Pageable with sorting
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        // Fetch posts with sorting
+        Page<Post> postsPage = postRepository.findByAuthor_IdIn(memberIds, pageable);
+
+        // Map to DTOs
+        return postsPage.map(postMapper::toDTO);
     }
 
     /**
-     * Retrieve posts for a goal.
-     * Only returns posts that reference the given goal.
-     *
-     * @param goalId The ID of the goal.
-     * @return A list of PostDTOs for the goal feed.
+     * Retrieve feed for a goal with dynamic sorting.
      */
-    public List<PostDTO> getGoalFeed(Long goalId) {
-        List<Post> posts = postRepository.findByReferencedGoal_Id(goalId);
-        return posts.stream()
-                .map(postMapper::toDTO)
-                .collect(Collectors.toList());
+    public Page<PostDTO> getGoalFeed(Long goalId, int page, int size, String sortBy, String sortDir) {
+        // Determine Sort direction
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (sortDir.equalsIgnoreCase("desc")) {
+            direction = Sort.Direction.DESC;
+        }
+
+        // Create Pageable with sorting
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        // Fetch posts with sorting
+        Page<Post> postsPage = postRepository.findByReferencedGoal_Id(goalId, pageable);
+
+        // Map to DTOs
+        return postsPage.map(postMapper::toDTO);
+    }
+
+    /**
+     * NEW: Retrieve the 3 most recent posts by a specific user.
+     */
+    @Transactional(readOnly = true)
+    public List<PostDTO> getRecentPostsByUser(Long userId) {
+        Pageable pageable = PageRequest.of(0, 3, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Post> page = postRepository.findByAuthor_Id(userId, pageable);
+        return page.stream().map(postMapper::toDTO).collect(Collectors.toList());
     }
 }

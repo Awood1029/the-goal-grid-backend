@@ -1,20 +1,28 @@
 package com.thegoalgrid.goalgrid.repository;
 
 import com.thegoalgrid.goalgrid.entity.Post;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
-@Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
-    // Used to retrieve posts (e.g., for feeds)
-    List<Post> findByAuthor_IdIn(List<Long> authorIds);
+    // For main feed: posts by a list of author IDs
+    @EntityGraph(attributePaths = {"postReactions", "postReactions.user"})
+    Page<Post> findByAuthor_IdIn(List<Long> authorIds, Pageable pageable);
 
-    // Used for goal feed: only posts that reference the given goal
-    List<Post> findByReferencedGoal_Id(Long goalId);
+    // For goal feed: posts referencing a specific goal
+    @EntityGraph(attributePaths = {"postReactions", "postReactions.user"})
+    Page<Post> findByReferencedGoal_Id(Long goalId, Pageable pageable);
 
-    // New method to find post by ID and author ID
-    Optional<Post> findByIdAndAuthor_Id(Long id, Long authorId);
+    // For group feed: posts by group member IDs
+    @EntityGraph(attributePaths = {"postReactions", "postReactions.user"})
+    Page<Post> findByAuthor_IdInAndReferencedGoal_IdIsNull(List<Long> authorIds, Pageable pageable);
+
+    // NEW: Retrieve posts for a specific author.
+    // This method was missing, so we add it to enable getRecentPostsByUser in PostService.
+    @EntityGraph(attributePaths = {"postReactions", "postReactions.user"})
+    Page<Post> findByAuthor_Id(Long authorId, Pageable pageable);
 }

@@ -19,6 +19,9 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -57,11 +60,15 @@ public class AuthController {
                     .body("Error: Could not register user.");
         }
 
-        // Generate JWT token (optional, if you want to auto-login, but per spec we return to login)
-        String token = jwtUtil.generateJwtToken(user.getId(), user.getUsername());
-        AuthResponseDTO authResponse = new AuthResponseDTO(token, user.getId(), user.getUsername(), user.getFirstName(), user.getLastName());
-        // Instead of auto-login, simply log registration and instruct user to login.
-        return ResponseEntity.ok(authResponse);
+        // Generate access and refresh tokens
+        String accessToken = jwtUtil.generateJwtToken(user.getId(), user.getUsername());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId(), user.getUsername());
+        AuthResponseDTO authResponse = new AuthResponseDTO(accessToken, refreshToken, user.getId(), user.getUsername(), user.getFirstName(), user.getLastName());
+
+        // Return both tokens in a combined response
+        Map<String, Object> response = new HashMap<>();
+        response.put("auth", authResponse);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
@@ -72,15 +79,47 @@ public class AuthController {
                     new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
             );
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            String token = jwtUtil.generateJwtToken(userDetails.getId(), userDetails.getUsername());
+            String accessToken = jwtUtil.generateJwtToken(userDetails.getId(), userDetails.getUsername());
+            String refreshToken = jwtUtil.generateRefreshToken(userDetails.getId(), userDetails.getUsername());
             logger.info("User {} successfully authenticated", loginRequest.getUsername());
-            AuthResponseDTO authResponse = new AuthResponseDTO(token, userDetails.getId(), userDetails.getUsername(), userDetails.getFirstName(), userDetails.getLastName());
-            return ResponseEntity.ok(authResponse);
+            AuthResponseDTO authResponse = new AuthResponseDTO(accessToken, refreshToken, userDetails.getId(), userDetails.getUsername(), userDetails.getFirstName(), userDetails.getLastName());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("auth", authResponse);
+            return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
             logger.warn("Authentication failed for user {}: {}", loginRequest.getUsername(), e.getMessage());
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
                     .body("Error: Invalid username or password");
+        }
+    }
+
+    /**
+     * New endpoint for refreshing access tokens using a refresh token.
+     * Expects a JSON payload like: { "refreshToken": "..." }
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> tokenRequest) {
+        String refreshToken = tokenRequest.get("refreshToken");
+        if (refreshToken == null) {
+            return ResponseEntity.badRequest().body("Refresh token is missing");
+        }
+
+        // Validate the refresh token (assumes JwtUtil has a method for this)
+        if (jwtUtil.validateRefreshToken(refreshToken)) {
+            // Extract username from the refresh token (assumes such a method exists)
+            String username = jwtUtil.getUsernameFromRefreshToken(refreshToken);
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found with username: " + username));
+            // Generate a new access token
+            String newAccessToken = jwtUtil.generateJwtToken(user.getId(), user.getUsername());
+            AuthResponseDTO authResponse = new AuthResponseDTO(newAccessToken, refreshToken, user.getId(), user.getUsername(), user.getFirstName(), user.getLastName());
+            Map<String, Object> response = new HashMap<>();
+            response.put("auth", authResponse);
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token.");
         }
     }
 }

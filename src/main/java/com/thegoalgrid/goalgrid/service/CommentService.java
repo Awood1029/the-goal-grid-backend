@@ -4,6 +4,7 @@ import com.thegoalgrid.goalgrid.dto.social.CommentDTO;
 import com.thegoalgrid.goalgrid.dto.social.ReactionDTO;
 import com.thegoalgrid.goalgrid.entity.Comment;
 import com.thegoalgrid.goalgrid.entity.CommentReaction;
+import com.thegoalgrid.goalgrid.entity.ReactionType;
 import com.thegoalgrid.goalgrid.entity.User;
 import com.thegoalgrid.goalgrid.mapper.CommentMapper;
 import com.thegoalgrid.goalgrid.mapper.ReactionMapper;
@@ -95,5 +96,23 @@ public class CommentService {
         commentRepository.save(comment);
 
         return reactionMapper.toDTO(savedReaction);
+    }
+
+    /**
+     * Remove a reaction for a specific comment.
+     */
+    @Transactional
+    public void removeReactionForComment(Long commentId, ReactionType type, UserDetailsImpl userDetails) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new RuntimeException("Comment not found with ID: " + commentId));
+        User user = userService.getUserById(userDetails.getId());
+
+        // Find the existing reaction
+        CommentReaction reaction = commentReactionRepository.findByUserAndTypeAndComment(user, type, comment)
+                .orElseThrow(() -> new RuntimeException("Reaction not found for type: " + type));
+
+        // Remove the reaction
+        comment.getCommentReactions().remove(reaction);
+        commentReactionRepository.delete(reaction);
     }
 }

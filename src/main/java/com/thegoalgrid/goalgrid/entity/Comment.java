@@ -30,6 +30,6 @@ public class Comment {
 
     private LocalDateTime createdAt;
 
-    @OneToMany(mappedBy = "comment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "comment", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<CommentReaction> commentReactions = new ArrayList<>();
 }

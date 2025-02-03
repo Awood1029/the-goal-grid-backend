@@ -10,6 +10,7 @@ import com.thegoalgrid.goalgrid.repository.GoalRepository;
 import com.thegoalgrid.goalgrid.security.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,12 +57,16 @@ public class GoalService {
     }
 
     /**
-     * Retrieve all comments attached directly to a goal.
+     * Retrieve all comments attached directly to a goal with sorting.
      */
-    public List<CommentDTO> getAllCommentsForGoal(Long goalId) {
-        Goal goal = goalRepository.findById(goalId)
-                .orElseThrow(() -> new RuntimeException("Goal not found with ID: " + goalId));
-        List<Comment> comments = goal.getComments();
+    public List<CommentDTO> getAllCommentsForGoal(Long goalId, String sortBy, String sortDir) {
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (sortDir.equalsIgnoreCase("desc")) {
+            direction = Sort.Direction.DESC;
+        }
+        Sort sort = Sort.by(direction, sortBy);
+
+        List<Comment> comments = commentRepository.findByGoal_Id(goalId, sort);
         return comments.stream()
                 .map(commentMapper::toDTO)
                 .collect(Collectors.toList());

@@ -14,8 +14,8 @@ public class PostDTO {
     private LocalDateTime createdAt;
 
     private List<ReactionDTO> reactions;
-    private List<CommentDTO> comments;
+    private int commentCount;
 
-    private Long referencedGoalId;
+    private ReferencedGoalDTO referencedGoal;
     private boolean progressUpdate;
 }

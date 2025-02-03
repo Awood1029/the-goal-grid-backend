@@ -3,6 +3,7 @@ package com.thegoalgrid.goalgrid.controller;
 import com.thegoalgrid.goalgrid.dto.social.CommentDTO;
 import com.thegoalgrid.goalgrid.dto.social.PostDTO;
 import com.thegoalgrid.goalgrid.dto.social.ReactionDTO;
+import com.thegoalgrid.goalgrid.entity.ReactionType;
 import com.thegoalgrid.goalgrid.security.UserDetailsImpl;
 import com.thegoalgrid.goalgrid.service.PostService;
 import lombok.RequiredArgsConstructor;
@@ -77,8 +78,11 @@ public class PostController {
      * Example: GET /api/posts/{postId}/comments
      */
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<List<CommentDTO>> getAllCommentsForPost(@PathVariable Long postId) {
-        List<CommentDTO> comments = postService.getAllCommentsForPost(postId);
+    public ResponseEntity<List<CommentDTO>> getAllCommentsForPost(
+            @PathVariable Long postId,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        List<CommentDTO> comments = postService.getAllCommentsForPost(postId, sortBy, sortDir);
         return ResponseEntity.ok(comments);
     }
 
@@ -112,5 +116,21 @@ public class PostController {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         ReactionDTO createdReaction = postService.createReactionForPost(postId, reactionDTO, userDetails);
         return ResponseEntity.ok(createdReaction);
+    }
+
+    /**
+     * Remove a reaction from a specific post.
+     * Example: DELETE /api/posts/{postId}/reactions?type=LIKE
+     */
+    @PreAuthorize("isAuthenticated()")
+    @DeleteMapping("/{postId}/reactions")
+    public ResponseEntity<Void> removeReactionFromPost(
+            @PathVariable Long postId,
+            @RequestParam ReactionType type,
+            Authentication authentication
+    ) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        postService.removeReactionForPost(postId, type, userDetails);
+        return ResponseEntity.noContent().build();
     }
 }

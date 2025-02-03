@@ -1,4 +1,3 @@
-// JwtUtil.java
 package com.thegoalgrid.goalgrid.security;
 
 import io.jsonwebtoken.*;
@@ -13,18 +12,33 @@ public class JwtUtil {
 
     private final SecretKey key = Keys.secretKeyFor(SignatureAlgorithm.HS512);
     private final long jwtExpirationMs = 86400000; // 24 hours
+    private final long refreshTokenExpirationMs = 604800000; // 7 days
 
     public String generateJwtToken(Long userId, String username) {
         return Jwts.builder()
-                .setSubject((username))
+                .setSubject(username)
                 .claim("userId", userId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+                .signWith(SignatureAlgorithm.HS512, key)
+                .compact();
+    }
+
+    public String generateRefreshToken(Long userId, String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("userId", userId)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
                 .signWith(SignatureAlgorithm.HS512, key)
                 .compact();
     }
 
     public String getUsernameFromJwtToken(String token) {
+        return parseClaims(token).getSubject();
+    }
+
+    public String getUsernameFromRefreshToken(String token) {
         return parseClaims(token).getSubject();
     }
 
@@ -37,7 +51,17 @@ public class JwtUtil {
             parseClaims(authToken);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
-            // Log the exception message if necessary
+            // Log the exception message if needed
+            return false;
+        }
+    }
+
+    public boolean validateRefreshToken(String token) {
+        try {
+            parseClaims(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            // Log the exception message if needed
             return false;
         }
     }

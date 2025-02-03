@@ -82,12 +82,17 @@ public class GoalController {
     }
 
     /**
-     * Get all comments for a specific goal.
-     * Example: GET /api/goals/{goalID}/comments
+     * Get all comments for a specific goal with optional sorting.
+     * Example: GET /api/goals/{goalID}/comments?sortBy=createdAt&sortDir=desc
      */
     @GetMapping("/{goalId}/comments")
-    public List<CommentDTO> getAllCommentsForGoal(@PathVariable Long goalId) {
-        return goalService.getAllCommentsForGoal(goalId);
+    public ResponseEntity<List<CommentDTO>> getAllCommentsForGoal(
+            @PathVariable Long goalId,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir
+    ) {
+        List<CommentDTO> comments = goalService.getAllCommentsForGoal(goalId, sortBy, sortDir);
+        return ResponseEntity.ok(comments);
     }
 
     /**

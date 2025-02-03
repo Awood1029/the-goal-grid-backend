@@ -13,3 +13,4 @@ import java.util.Optional;
 public interface PostReactionRepository extends JpaRepository<PostReaction, Long> {
     Optional<PostReaction> findByUserAndTypeAndPost(User user, ReactionType type, Post post);
 }
+

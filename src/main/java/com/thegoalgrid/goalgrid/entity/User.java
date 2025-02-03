@@ -43,6 +43,39 @@ public class User implements UserDetails {
     @JsonIgnore
     private Board board;
 
+    // Self-referential many-to-many relationship for friendships
+    @ManyToMany
+    @JoinTable(
+            name = "user_friends",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "friend_id")
+    )
+    private Set<User> friends = new HashSet<>();
+
+    /**
+     * Adds a friend to this user’s friend list and also updates the friend's friend list.
+     * This creates a bidirectional friendship.
+     *
+     * @param friend the user to be added as a friend
+     */
+    public void addFriend(User friend) {
+        if (this.equals(friend)) {
+            throw new IllegalArgumentException("Cannot add yourself as a friend.");
+        }
+        this.friends.add(friend);
+        friend.getFriends().add(this);
+    }
+
+    /**
+     * Removes a friend from this user’s friend list and also updates the friend's friend list.
+     *
+     * @param friend the user to be removed from the friend list
+     */
+    public void removeFriend(User friend) {
+        this.friends.remove(friend);
+        friend.getFriends().remove(this);
+    }
+
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {

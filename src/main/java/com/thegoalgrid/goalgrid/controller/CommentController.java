@@ -2,6 +2,7 @@ package com.thegoalgrid.goalgrid.controller;
 
 import com.thegoalgrid.goalgrid.dto.social.CommentDTO;
 import com.thegoalgrid.goalgrid.dto.social.ReactionDTO;
+import com.thegoalgrid.goalgrid.entity.ReactionType;
 import com.thegoalgrid.goalgrid.security.UserDetailsImpl;
 import com.thegoalgrid.goalgrid.entity.User;
 import com.thegoalgrid.goalgrid.service.CommentService;
@@ -72,5 +73,21 @@ public class CommentController {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         ReactionDTO createdReaction = commentService.createReactionForComment(commentId, reactionDTO, userDetails);
         return ResponseEntity.ok(createdReaction);
+    }
+
+    /**
+     * Remove a reaction from a specific comment.
+     * Example: DELETE /api/comments/{commentId}/reactions?type=LOVE
+     */
+    @PreAuthorize("isAuthenticated()")
+    @DeleteMapping("/{commentId}/reactions")
+    public ResponseEntity<Void> removeReactionFromComment(
+            @PathVariable Long commentId,
+            @RequestParam ReactionType type,
+            Authentication authentication
+    ) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        commentService.removeReactionForComment(commentId, type, userDetails);
+        return ResponseEntity.noContent().build();
     }
 }
